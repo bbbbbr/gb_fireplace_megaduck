@@ -7,7 +7,19 @@ def FRAME_DATA_SIZE equ FRAME_TILE_DATA_SIZE + 360
 def FRAME_PER_BANK equ $4000 / FRAME_DATA_SIZE
 def FRAME_DATA_SIZE_PER_BANK equ FRAME_PER_BANK * FRAME_DATA_SIZE
 def BIN_FILE_NAME equs "\"fire.bin\"";"\"first_part_big_60t.bin\"";"\"test02_01.bin\""
-def BANKS_TO_USE equ 209
+if def(TARGET_MEGADUCK)
+    def BANKS_TO_USE equ 1
+else
+    def BANKS_TO_USE equ 209
+endc
+
+if def(TARGET_MEGADUCK)
+    ; Duck Entry point is 0x0000
+    SECTION "ROM0Duck", ROM0[$0]
+    DuckEntryPoint:
+        jp   EntryPoint
+endc
+
 
 SECTION "Header", ROM0[$100]
 
@@ -26,6 +38,12 @@ kMaxBank:
 SECTION "Game code", ROM0
 
 Start:
+; No boot ROM, so can't assume LCD is turned on at startup
+if def(TARGET_MEGADUCK)
+    ld a, (LCDCF_ON)
+    ldh [rLCDC], a
+endc
+
 .waitVBlank
   ldh a, [rLY]
   cp 144 ; Check if the LCD is past VBlank
@@ -34,10 +52,14 @@ Start:
   ldh [rLCDC], a ; We will have to write to LCDC again later, so it's not a bother, really.
 
   ld a, 1
+if (!def(TARGET_MEGADUCK))
   ld [rROMB0], a
+endc
   ld [vCurrentBank], a
   ld a, 0
+if (!def(TARGET_MEGADUCK))
   ld [rROMB1], a
+endc
 
   ld bc, VidData
   ld hl, _VRAM8000
@@ -51,7 +73,7 @@ Start:
   ldh [rBGP], a
 
   ;; turn the screen back on with background enabled
-  ld a, %10010001
+  ld a, (LCDCF_ON | LCDCF_BG8000 | LCDCF_BGON)
   ldh [rLCDC], a
 
 FirstCopy:
@@ -59,7 +81,7 @@ FirstCopy:
 
 ;  ld hl, _VRAM8000
   ldh a, [rLCDC]
-  bit 4, a
+  bit LCDCB_BG8000, a
   jr nz, :+
   ld hl, _VRAM8000
   jr :++
@@ -90,7 +112,7 @@ ENDR
 ;  ld hl, _SCRN0
 ;  jr .copyMap
   ldh a, [rLCDC]
-  bit 4, a
+  bit LCDCB_BG8000, a
   jr z, :+
   ld hl, _SCRN1
   jr :++
@@ -144,7 +166,9 @@ ENDR
 .notEndOfBanks
   inc a
 .storeBank
+if (!def(TARGET_MEGADUCK))
   ld [rROMB0], a
+endc
   ld [vCurrentBank], a
   ld bc, VidData
   
